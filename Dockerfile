@@ -6,6 +6,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM node:20-slim AS backend-builder
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --only=production
@@ -13,6 +14,7 @@ COPY backend/prisma ./prisma
 RUN npx prisma generate
 
 FROM node:20-slim
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/sh nodejs
 COPY --from=backend-builder /app/node_modules ./node_modules
