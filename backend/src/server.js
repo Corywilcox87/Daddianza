@@ -57,7 +57,11 @@ app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev', {
 // Serve built frontend in production
 if (config.nodeEnv === 'production') {
   const path = require('path');
-  const frontendDist = path.join(__dirname, '../../frontend/dist');
+  const fs = require('fs');
+  // Docker build copies frontend dist to /app/public; local dev uses relative path
+  const dockerPublic = path.join(__dirname, '../public');
+  const localDist = path.join(__dirname, '../../frontend/dist');
+  const frontendDist = fs.existsSync(dockerPublic) ? dockerPublic : localDist;
   app.use(express.static(frontendDist));
 }
 
@@ -75,8 +79,12 @@ app.use('/api', routes);
 // SPA fallback for non-API routes in production
 if (config.nodeEnv === 'production') {
   const path = require('path');
+  const fs = require('fs');
+  const dockerPublic = path.join(__dirname, '../public');
+  const localDist = path.join(__dirname, '../../frontend/dist');
+  const frontendDist = fs.existsSync(dockerPublic) ? dockerPublic : localDist;
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+    res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }
 
