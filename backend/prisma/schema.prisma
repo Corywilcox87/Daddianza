@@ -1,0 +1,622 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Multi-tenancy ────────────────────────────────────────────────────────────
+
+model Tenant {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  domain        String?  @unique
+  logoUrl       String?
+  primaryColor  String   @default("#2563EB")
+  plan          Plan     @default(STARTER)
+  status        TenantStatus @default(ACTIVE)
+  maxUsers      Int      @default(5)
+  maxCats       Int      @default(50)
+  stripeCustomerId   String?  @unique
+  stripeSubscriptionId String? @unique
+  subscriptionStatus String?
+  currentPeriodEnd   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users         User[]
+  accounts      Account[]
+  contacts      Contact[]
+  cats          Cat[]
+  shows         Show[]
+  showEntries   ShowEntry[]
+  showResults   ShowResult[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  documents     Document[]
+  tasks         Task[]
+  notes         Note[]
+  portalUsers   PortalUser[]
+  invoices      Invoice[]
+
+  @@map("tenants")
+}
+
+enum Plan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+  TRIAL
+}
+
+// ─── Users & Auth ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  tenantId      String
+  email         String
+  passwordHash  String
+  firstName     String
+  lastName      String
+  role          UserRole @default(AGENT)
+  avatarUrl     String?
+  phone         String?
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activities    Activity[]
+  tasks         Task[]
+  notes         Note[]
+  assignedLeads Lead[]   @relation("LeadAssignee")
+  assignedOpps  Opportunity[] @relation("OppAssignee")
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  AGENT
+  VIEWER
+}
+
+model PortalUser {
+  id            String   @id @default(uuid())
+  tenantId      String
+  contactId     String?  @unique
+  email         String
+  passwordHash  String
+  firstName     String
+  lastName      String
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact? @relation(fields: [contactId], references: [id])
+
+  @@unique([tenantId, email])
+  @@map("portal_users")
+}
+
+// ─── CRM Core ─────────────────────────────────────────────────────────────────
+
+model Account {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  type          AccountType @default(EXHIBITOR)
+  website       String?
+  phone         String?
+  email         String?
+  billingStreet String?
+  billingCity   String?
+  billingState  String?
+  billingZip    String?
+  billingCountry String? @default("USA")
+  description   String?
+  industry      String?
+  employeeCount Int?
+  annualRevenue Decimal?  @db.Decimal(15,2)
+  assignedUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts      Contact[]
+  cats          Cat[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  documents     Document[]
+  notes         Note[]
+  showEntries   ShowEntry[]
+
+  @@map("accounts")
+}
+
+enum AccountType {
+  EXHIBITOR
+  CATTERY
+  CLUB
+  JUDGE
+  SPONSOR
+  VENDOR
+  OTHER
+}
+
+model Contact {
+  id            String   @id @default(uuid())
+  tenantId      String
+  accountId     String?
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String?
+  mobile        String?
+  title         String?
+  department    String?
+  street        String?
+  city          String?
+  state         String?
+  zip           String?
+  country       String?  @default("USA")
+  cfaMemberId   String?
+  memberSince   DateTime?
+  description   String?
+  doNotContact  Boolean  @default(false)
+  assignedUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account       Account? @relation(fields: [accountId], references: [id])
+  cats          Cat[]
+  showEntries   ShowEntry[]
+  activities    Activity[]
+  documents     Document[]
+  notes         Note[]
+  portalUser    PortalUser?
+
+  @@unique([tenantId, email])
+  @@map("contacts")
+}
+
+model Lead {
+  id            String   @id @default(uuid())
+  tenantId      String
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String?
+  company       String?
+  title         String?
+  status        LeadStatus @default(NEW)
+  source        LeadSource @default(WEBSITE)
+  description   String?
+  street        String?
+  city          String?
+  state         String?
+  zip           String?
+  country       String?  @default("USA")
+  convertedAt   DateTime?
+  accountId     String?
+  assignedUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account       Account? @relation(fields: [accountId], references: [id])
+  assignedUser  User?    @relation("LeadAssignee", fields: [assignedUserId], references: [id])
+  activities    Activity[]
+  notes         Note[]
+
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  ASSIGNED
+  IN_PROCESS
+  CONVERTED
+  RECYCLED
+  DEAD
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  TRADE_SHOW
+  COLD_CALL
+  EMAIL_CAMPAIGN
+  SOCIAL_MEDIA
+  OTHER
+}
+
+model Opportunity {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  accountId     String?
+  amount        Decimal?  @db.Decimal(15,2)
+  currency      String   @default("USD")
+  stage         OpportunityStage @default(PROSPECTING)
+  probability   Int      @default(10)
+  closeDate     DateTime?
+  leadSource    LeadSource @default(WEBSITE)
+  description   String?
+  assignedUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account       Account? @relation(fields: [accountId], references: [id])
+  assignedUser  User?    @relation("OppAssignee", fields: [assignedUserId], references: [id])
+  activities    Activity[]
+  notes         Note[]
+
+  @@map("opportunities")
+}
+
+enum OpportunityStage {
+  PROSPECTING
+  QUALIFICATION
+  NEEDS_ANALYSIS
+  VALUE_PROPOSITION
+  DECISION_MAKERS
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+// ─── CFA Show Tracker ─────────────────────────────────────────────────────────
+
+model Cat {
+  id              String   @id @default(uuid())
+  tenantId        String
+  accountId       String?
+  contactId       String?
+  registrationNumber String?
+  name            String
+  breed           String
+  color           String?
+  pattern         String?
+  sex             CatSex
+  birthDate       DateTime?
+  birthCountry    String?  @default("USA")
+  sireId          String?
+  damId           String?
+  ownerName       String?
+  breederName     String?
+  cfaTitles       String[]
+  currentTitle    String?
+  photoUrl        String?
+  isActive        Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account         Account? @relation(fields: [accountId], references: [id])
+  contact         Contact? @relation(fields: [contactId], references: [id])
+  sire            Cat?     @relation("Sire", fields: [sireId], references: [id])
+  kittensBySire   Cat[]    @relation("Sire")
+  dam             Cat?     @relation("Dam", fields: [damId], references: [id])
+  kittensByDam    Cat[]    @relation("Dam")
+  showEntries     ShowEntry[]
+  showResults     ShowResult[]
+
+  @@map("cats")
+}
+
+enum CatSex {
+  MALE
+  FEMALE
+  ALTERED_MALE
+  ALTERED_FEMALE
+}
+
+model Show {
+  id              String   @id @default(uuid())
+  tenantId        String
+  name            String
+  cfaShowNumber   String?
+  showDate        DateTime
+  showEndDate     DateTime?
+  entryDeadline   DateTime?
+  venue           String?
+  street          String?
+  city            String
+  state           String
+  zip             String?
+  country         String   @default("USA")
+  clubName        String?
+  clubId          String?
+  masterClerk     String?
+  showManager     String?
+  ringCount       Int      @default(1)
+  status          ShowStatus @default(UPCOMING)
+  showType        ShowType @default(ALLBREED)
+  entryFee        Decimal? @db.Decimal(10,2)
+  description     String?
+  website         String?
+  isPublic        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  judges          ShowJudge[]
+  entries         ShowEntry[]
+  results         ShowResult[]
+
+  @@map("shows")
+}
+
+enum ShowStatus {
+  UPCOMING
+  ENTRIES_OPEN
+  ENTRIES_CLOSED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ShowType {
+  ALLBREED
+  SPECIALTY
+  HOUSEHOLD_PET
+  PREMIER
+  KITTEN
+}
+
+model ShowJudge {
+  id        String   @id @default(uuid())
+  showId    String
+  judgeId   String?
+  judgeName String
+  judgeNumber String?
+  ringNumber  Int
+  specialty   String?
+
+  show      Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+
+  @@map("show_judges")
+}
+
+model ShowEntry {
+  id              String   @id @default(uuid())
+  tenantId        String
+  showId          String
+  catId           String
+  contactId       String?
+  accountId       String?
+  entryNumber     String?
+  entryClass      String?
+  cageNumber      String?
+  isConfirmed     Boolean  @default(false)
+  isPaid          Boolean  @default(false)
+  entryFee        Decimal? @db.Decimal(10,2)
+  paymentMethod   String?
+  paymentDate     DateTime?
+  specialRequests String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  show            Show     @relation(fields: [showId], references: [id])
+  cat             Cat      @relation(fields: [catId], references: [id])
+  contact         Contact? @relation(fields: [contactId], references: [id])
+  account         Account? @relation(fields: [accountId], references: [id])
+  results         ShowResult[]
+
+  @@unique([showId, catId])
+  @@map("show_entries")
+}
+
+model ShowResult {
+  id            String   @id @default(uuid())
+  tenantId      String
+  showId        String
+  showEntryId   String?
+  catId         String
+  ringNumber    Int
+  judgeName     String?
+  placement     Int?
+  awardType     AwardType?
+  awardTitle    String?
+  points        Int?      @default(0)
+  isFinal       Boolean   @default(false)
+  finalPosition Int?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  show          Show      @relation(fields: [showId], references: [id])
+  showEntry     ShowEntry? @relation(fields: [showEntryId], references: [id])
+  cat           Cat       @relation(fields: [catId], references: [id])
+
+  @@map("show_results")
+}
+
+enum AwardType {
+  BEST_IN_SHOW
+  SECOND_BEST_IN_SHOW
+  BEST_OF_COLOR_CLASS
+  BEST_OF_BREED
+  BEST_CHAMPION
+  GRAND_CHAMPION
+  DOUBLE_GRAND
+  TRIPLE_GRAND
+  REGIONAL_WINNER
+  NATIONAL_WINNER
+  BEST_KITTEN
+  BEST_PREMIER
+  BEST_HOUSEHOLD_PET
+  MERIT_AWARD
+  OTHER
+}
+
+// ─── Activities & Notes ───────────────────────────────────────────────────────
+
+model Activity {
+  id            String   @id @default(uuid())
+  tenantId      String
+  type          ActivityType
+  subject       String
+  description   String?
+  status        ActivityStatus @default(PLANNED)
+  dateStart     DateTime?
+  dateEnd       DateTime?
+  duration      Int?
+  direction     String?
+  userId        String?
+  accountId     String?
+  contactId     String?
+  leadId        String?
+  opportunityId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id])
+  account       Account? @relation(fields: [accountId], references: [id])
+  contact       Contact? @relation(fields: [contactId], references: [id])
+  lead          Lead?    @relation(fields: [leadId], references: [id])
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  @@map("activities")
+}
+
+enum ActivityType {
+  CALL
+  MEETING
+  EMAIL
+  TASK
+}
+
+enum ActivityStatus {
+  PLANNED
+  HELD
+  NOT_HELD
+}
+
+model Task {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  status        TaskStatus @default(NOT_STARTED)
+  priority      TaskPriority @default(NORMAL)
+  dueDate       DateTime?
+  description   String?
+  assignedUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedUser  User?    @relation(fields: [assignedUserId], references: [id])
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  STARTED
+  COMPLETED
+  CANCELLED
+  DEFERRED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Note {
+  id            String   @id @default(uuid())
+  tenantId      String
+  body          String
+  userId        String?
+  accountId     String?
+  contactId     String?
+  leadId        String?
+  opportunityId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id])
+  account       Account? @relation(fields: [accountId], references: [id])
+  contact       Contact? @relation(fields: [contactId], references: [id])
+  lead          Lead?    @relation(fields: [leadId], references: [id])
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  @@map("notes")
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  fileName      String
+  fileSize      Int?
+  mimeType      String?
+  url           String?
+  description   String?
+  accountId     String?
+  contactId     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account       Account? @relation(fields: [accountId], references: [id])
+  contact       Contact? @relation(fields: [contactId], references: [id])
+
+  @@map("documents")
+}
+
+// ─── Billing / Invoices ───────────────────────────────────────────────────────
+
+model Invoice {
+  id            String   @id @default(uuid())
+  tenantId      String
+  stripeInvoiceId String? @unique
+  amount        Decimal  @db.Decimal(10,2)
+  currency      String   @default("USD")
+  status        InvoiceStatus @default(PENDING)
+  dueDate       DateTime?
+  paidAt        DateTime?
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
