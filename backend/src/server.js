@@ -54,6 +54,13 @@ app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev', {
   stream: { write: (msg) => logger.info(msg.trim()) },
 }));
 
+// Serve built frontend in production
+if (config.nodeEnv === 'production') {
+  const path = require('path');
+  const frontendDist = path.join(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendDist));
+}
+
 // Health check
 app.get('/health', (req, res) => res.json({
   status: 'ok',
@@ -65,7 +72,15 @@ app.get('/health', (req, res) => res.json({
 // API routes
 app.use('/api', routes);
 
-// 404 handler
+// SPA fallback for non-API routes in production
+if (config.nodeEnv === 'production') {
+  const path = require('path');
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+  });
+}
+
+// 404 handler (dev only)
 app.use((req, res) => res.status(404).json({ success: false, message: 'Endpoint not found' }));
 
 // Global error handler

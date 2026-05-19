@@ -62,7 +62,7 @@ export default function CRMLayout() {
                 clsx('sidebar-link', isActive && 'active')
               }
             >
-              <item.icon! className="w-5 h-5 flex-shrink-0" />
+              {item.icon && <item.icon className="w-5 h-5 flex-shrink-0" />}
               {item.name}
             </NavLink>
           )

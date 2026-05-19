@@ -306,7 +306,7 @@ function InvoiceHistory() {
                   <td className="font-mono text-xs">{inv.number ?? inv.id}</td>
                   <td>
                     {inv.created
-                      ? format(new Date(inv.created * 1000 ?? inv.created), 'MMM d, yyyy')
+                      ? format(new Date(inv.created * 1000), 'MMM d, yyyy')
                       : '—'}
                   </td>
                   <td>${((inv.amount_paid ?? inv.amount ?? 0) / 100).toFixed(2)}</td>

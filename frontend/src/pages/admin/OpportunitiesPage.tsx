@@ -5,7 +5,6 @@ import {
   BriefcaseIcon,
   Squares2X2Icon,
   ListBulletIcon,
-  Link as LinkIcon,
 } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
