@@ -23,4 +23,5 @@ RUN mkdir -p /app/uploads /app/logs && chown -R nodejs:nodejs /app
 USER nodejs
 EXPOSE 4000
 ENV NODE_ENV=production
-CMD ["node", "src/server.js"]
+# Run migrations then seed (only if DB is empty) then start
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/seed.js 2>/dev/null || true && node src/server.js"]
