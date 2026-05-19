@@ -1,20 +1,20 @@
-FROM node:20-alpine AS frontend-builder
+FROM node:20-slim AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
 RUN npm run build
 
-FROM node:20-alpine AS backend-builder
+FROM node:20-slim AS backend-builder
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --only=production
 COPY backend/prisma ./prisma
 RUN npx prisma generate
 
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/sh nodejs
 COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/prisma ./prisma
 COPY backend/src ./src
